@@ -112,7 +112,7 @@ async function choice(driveAPI) {
 
 	rl.question('Enter your choice: ', chosen => {
 		if (chosen === '1') {
-			listFiles(driveAPI);
+			listDriveFiles(driveAPI);
 		} else if (chosen <= x && chosen > 1) {
 			listDriveFiles(driveAPI, result[chosen - 2].id);
 		} else {
@@ -121,7 +121,7 @@ async function choice(driveAPI) {
 	});
 }
 
-async function listDriveFiles(driveAPI, driveId) {
+async function listDriveFiles(driveAPI, driveId = null) {
 	const startTime = moment.now();
 
 	const folderOptions = {
