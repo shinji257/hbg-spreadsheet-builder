@@ -282,7 +282,11 @@ function writeToDrive(driveAPI) {
 
 			console.log('Done!');
 		}
-		rl.question('Press any key to close...', () => process.exit(0));
+		process.stdout.write('\nPress any key to exit...');
+
+		process.stdin.setRawMode(true);
+		process.stdin.resume();
+		process.stdin.on('data', process.exit.bind(process, 0));
 	});
 }
 
