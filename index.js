@@ -1,10 +1,15 @@
+const flags = process.argv.slice(2);
+let debug = false;
+
+if (flags.includes('debug') || flags.includes('-debug') || flags.includes('--debug')) debug = true;
+
+
 const fs = require('fs');
 const readline = require('readline');
 const { google } = require('googleapis');
 const xl = require('excel4node');
 const moment = require('moment')
 const stream = require('stream');
-const config = require('./conf.json');
 
 const wb = new xl.Workbook();
 
@@ -12,8 +17,13 @@ const workbook = [];
 
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
 const TOKEN_PATH = 'token.json';
+let spreadsheetId;
+let driveAPI;
 
-const spreadsheetId = config.spreadsheetId;
+if (fs.existsSync('conf.json')) {
+	const config = require('./conf.json');
+	spreadsheetId = config.spreadsheetId;
+}
 
 const rl = readline.createInterface({
 	input: process.stdin,
@@ -43,7 +53,13 @@ function authorize(credentials, callback) {
 	fs.readFile(TOKEN_PATH, (err, token) => {
 		if (err) return getAccessToken(oAuth2Client, callback);
 		oAuth2Client.setCredentials(JSON.parse(token));
-		callback(oAuth2Client);
+
+		driveAPI = google.drive({
+			version: 'v3',
+			auth: oAuth2Client
+		});
+
+		callback(driveAPI);
 	});
 }
 
@@ -70,20 +86,21 @@ function getAccessToken(oAuth2Client, callback) {
 				if (err) return console.error(err);
 				console.log('Token stored to', TOKEN_PATH);
 			});
-			callback(oAuth2Client);
+
+			driveAPI = google.drive({
+				version: 'v3',
+				auth: oAuth2Client
+			});
+	
+			callback(driveAPI);
 		});
 	});
 }
 
-async function choice(auth) {
-	const drive = google.drive({
-		version: 'v3',
-		auth
-	});
-
-	const resp = await drive.drives.list({
+async function choice(driveAPI) {
+	const resp = await driveAPI.drives.list({
 		fields: 'drives(id, name)'
-	});
+	}).catch(console.error);
 
 	const result = resp.data.drives;
 
@@ -95,21 +112,16 @@ async function choice(auth) {
 
 	rl.question('Enter your choice: ', chosen => {
 		if (chosen === '1') {
-			listFiles(auth);
+			listFiles(driveAPI);
 		} else if (chosen <= x && chosen > 1) {
-			listDriveFiles(auth, result[chosen - 2].id);
+			listDriveFiles(driveAPI, result[chosen - 2].id);
 		} else {
-			choice(auth);
+			choice(driveAPI);
 		}
 	});
 }
 
-async function listDriveFiles(auth, driveId) {
-	const drive = google.drive({
-		version: 'v3',
-		auth
-	});
-
+async function listDriveFiles(driveAPI, driveId) {
 	const startTime = moment.now();
 
 	const folderOptions = {
@@ -127,9 +139,9 @@ async function listDriveFiles(auth, driveId) {
 		folderOptions.corpora = 'user';
 	}
 
-	let res = await drive.files.list(folderOptions);
+	let res = await driveAPI.files.list(folderOptions).catch(console.error);
 
-	if (res.status !== 200) return console.log(res);
+	if (res.status !== 200) return console.error(res);
 
 	const order = ['base', 'dlc', 'updates', 'Custom XCI', 'Custom XCI JP', 'Special Collection', 'XCI Trimmed'];
 
@@ -148,7 +160,8 @@ async function listDriveFiles(auth, driveId) {
 	for (const folder of folders) {
 		if (!['base', 'dlc', 'updates', 'Custom XCI', 'Custom XCI JP', 'XCI Trimmed', 'Special Collection'].includes(folder.name)) continue;
 
-		console.log(folder.name);
+		if (debug) console.log(folder.name);
+
 		const table = {
 			base: 'NSP Base',
 			dlc: 'NSP DLC',
@@ -175,10 +188,10 @@ async function listDriveFiles(auth, driveId) {
 			options.corpora = 'user';
 		}
 
-		files = await retrieveAllFiles(options, drive);
+		files = await retrieveAllFiles(options, driveAPI).catch(console.error);
 
 		if (files.length) {
-			console.log(`Files in ${folder.name}:`);
+			if (debug) console.log(`Files in ${folder.name}:`);
 
 			sheet.column(1).setWidth(93);
 			sheet.column(2).setWidth(18);
@@ -192,7 +205,7 @@ async function listDriveFiles(auth, driveId) {
 			
 			let i = 2;
 			for (const file of files) {
-				console.log(`${file.name} (${file.id})`);
+				if (debug) console.log(`${file.name} (${file.id})`);
 				
 				sheet.cell(i,1).string(file.name);
 				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:m:s'));
@@ -214,47 +227,85 @@ async function listDriveFiles(auth, driveId) {
 	console.log('Generation of NSP spreadsheet completed.');
 	console.log(`Took: ${moment.utc(moment().diff(startTime)).format("HH:mm:ss.SSS")}`);
 
-	if (spreadsheetId) {
-		console.log('Updating the spreadsheet on the drive.');
-	
-		const buf = new Buffer(fs.readFileSync('output/spreadsheet.xlsx'), 'binary');
-		const buffer = Uint8Array.from(buf);
-		var bufferStream = new stream.PassThrough();
-		bufferStream.end(buffer);
-		const media = {
-			mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			body: bufferStream,
-		};
-	
-		await drive.files.update({
-			fileId: spreadsheetId,
-			media
-		}).catch(err => console.log(err));
-
-		console.log('Done.');
-	}
-
-	process.exit(0);
+	writeToDrive(driveAPI);
 }
 
-function retrieveAllFiles(options, drive) {
+function writeToDrive(driveAPI) {
+	rl.question('Do you want to upload the spreadsheet to your google drive? [y/n]: ', async (answer) => {
+		if (answer === 'y') { 
+			const buf = Buffer.from(fs.readFileSync('output/spreadsheet.xlsx'), 'binary');
+			const buffer = Uint8Array.from(buf);
+			var bufferStream = new stream.PassThrough();
+			bufferStream.end(buffer);
+			const media = {
+				mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+				body: bufferStream,
+			};
+		
+			if (spreadsheetId) {	
+				console.log('Updating the spreadsheet on the drive...');
+		
+				await driveAPI.files.update({
+					fileId: spreadsheetId,
+					media
+				}).catch(console.error);	  
+			} else {
+				console.log('Creating the spreadsheet on the drive...')
+
+				const folderOptions = {
+					fields: 'nextPageToken, files(id, name)',
+					orderBy: 'name',
+					q: 'name contains \'hbg\' and mimeType = \'application/vnd.google-apps.folder\''
+				};
+
+				const result = await driveAPI.files.list(folderOptions).catch(console.error);
+
+				const folder = result.data.files[0];
+
+				const fileMetadata = {
+					name: '／hbg／ - Donator\'s Spreadsheet 3.0',
+					parents: [folder.id]
+				};
+
+				const file = await driveAPI.files.create({
+					resource: fileMetadata,
+					media,
+					fields: 'id'
+				}).catch(console.error);
+
+				const config = {
+					spreadsheetId: file.data.id
+				};
+
+				fs.writeFileSync('conf.json', JSON.stringify(config, null, '\t'));
+			}
+
+			console.log('Done!');
+		}
+		return;
+	});
+
+	rl.question('Press any key to close...', () => process.exit(0));
+}
+
+function retrieveAllFiles(options, driveAPI) {
 	return new Promise(async (resolve, reject) => {
-		const result = await retrievePageOfFiles(options, [], drive).catch(err => reject(err));
+		const result = await retrievePageOfFiles(options, [], driveAPI).catch(console.error);
 	
 		resolve(result);
 	});
 }
 
-function retrievePageOfFiles(options, result, drive) {
+function retrievePageOfFiles(options, result, driveAPI) {
 	return new Promise(async (resolve, reject) => {
-		const resp = await drive.files.list(options).catch(err => reject(err));
+		const resp = await driveAPI.files.list(options).catch(console.error);
 	
 		result = result.concat(resp.data.files);
 	
 		if (resp.data.nextPageToken) {
 			options.pageToken = resp.data.nextPageToken;
 	
-			const res = await retrievePageOfFiles(options, result, drive).catch(err => reject(err));
+			const res = await retrievePageOfFiles(options, result, driveAPI).catch(console.error);
 			resolve(res);
 		} else {
 			resolve(result);
