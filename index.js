@@ -282,10 +282,8 @@ function writeToDrive(driveAPI) {
 
 			console.log('Done!');
 		}
-		return;
+		rl.question('Press any key to close...', () => process.exit(0));
 	});
-
-	rl.question('Press any key to close...', () => process.exit(0));
 }
 
 function retrieveAllFiles(options, driveAPI) {
