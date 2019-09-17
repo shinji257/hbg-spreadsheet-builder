@@ -11,4 +11,4 @@ Run `npm install`
 Place a `credentials.json` in the folder. [Get one here](https://developers.google.com/drive/api/v3/quickstart/nodejs) 
 >**Note**: Use the Google account that has access to the right content
 
-Start the program with `npm run`
+Start the program with `npm start`
