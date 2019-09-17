@@ -1,0 +1,5 @@
+output/
+node_modules/
+token.json
+*.log
+yarn.lock
