@@ -105,9 +105,10 @@ async function choice(driveAPI) {
 	const result = resp.data.drives;
 
 	console.log('1: Your own drive');
-	const x = 2;
+	let x = 2;
 	for (const gdrive of result) {
 		console.log(`${x}: ${gdrive.name} (${gdrive.id})`);
+		x++;
 	}
 
 	rl.question('Enter your choice: ', chosen => {
@@ -127,7 +128,7 @@ async function listDriveFiles(driveAPI, driveId = null) {
 	const folderOptions = {
 		fields: 'nextPageToken, files(id, name)',
 		orderBy: 'name',
-		q: 'not name contains \'hbg\' and not name contains \'NSP Dumps\' and mimeType = \'application/vnd.google-apps.folder\''
+		q: 'name = \'hbg\''
 	};
 
 	if (driveId) {
@@ -139,13 +140,21 @@ async function listDriveFiles(driveAPI, driveId = null) {
 		folderOptions.corpora = 'user';
 	}
 
-	let res = await driveAPI.files.list(folderOptions).catch(console.error);
+	let res = await retrieveAllFiles(folderOptions, driveAPI).catch(console.error);
 
-	if (res.status !== 200) return console.error(res);
+	folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and \'${res[0].id}\' in parents`;
+
+	let res_folders = await retrieveAllFiles(folderOptions, driveAPI).catch(console.error);
 
 	const order = ['base', 'dlc', 'updates', 'Custom XCI', 'Custom XCI JP', 'Special Collection', 'XCI Trimmed'];
 
-	let unsorted = res.data.files
+	folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and \'${res_folders[res_folders.map(e => e.name).indexOf('NSP Dumps')].id}\' in parents`;
+
+	const temp = await retrieveAllFiles(folderOptions, driveAPI).catch(console.error);
+
+	res_folders = res_folders.concat(temp);
+
+	let unsorted = res_folders
 		.filter(folder => order.includes(folder.name));
 
 	let folders = [];
@@ -156,9 +165,26 @@ async function listDriveFiles(driveAPI, driveId = null) {
 
 	folders = folders.filter(arr => arr !== null);
 
+	const order_nsz = ['base', 'dlc', 'updates'];
+
+	folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and \'${res_folders[res_folders.map(e => e.name).indexOf('NSZ')].id}\' in parents`;
+
+	const res_nsz = await retrieveAllFiles(folderOptions, driveAPI).catch(console.error);
+
+	let unsorted_nsz = res_nsz
+		.filter(folder => order_nsz.includes(folder.name));
+
+	let folders_nsz = [];
+
+	for (const folder of unsorted_nsz) {
+		folders_nsz[order_nsz.indexOf(folder.name)] = folder
+	};
+
+	folders_nsz = folders_nsz.filter(arr => arr !== null);
+
 	let x = 0;
 	for (const folder of folders) {
-		if (!['base', 'dlc', 'updates', 'Custom XCI', 'Custom XCI JP', 'XCI Trimmed', 'Special Collection'].includes(folder.name)) continue;
+		if (!['base', 'dlc', 'updates'].includes(folder.name)) continue;
 
 		if (debug) console.log(folder.name);
 
@@ -168,54 +194,43 @@ async function listDriveFiles(driveAPI, driveId = null) {
 			updates: 'NSP Updates',
 		};
 
-		const folderName = table[folder.name] || folder.name;
-
-		const sheet = wb.addWorksheet(folderName);
-		
-		const options = {
-			fields: 'nextPageToken, files(id, name, size, webContentLink, modifiedTime)',
-			orderBy: 'name',
-			pageSize: 1000,
-			q: `\'${folder.id}\' in parents and not mimeType = \'application/vnd.google-apps.folder\'`
+		const folder_mod = {
+			name: table[folder.name],
+			id: folder.id
 		};
 
-		if (driveId) {
-			options.driveId = driveId;
-			options.corpora = 'drive';
-			options.includeItemsFromAllDrives = true;
-			options.supportsAllDrives = true;
-		} else {
-			options.corpora = 'user';
-		}
+		await addToWorkbook(folder_mod, driveAPI, driveId);
 
-		files = await retrieveAllFiles(options, driveAPI).catch(console.error);
+		x++;
+	}
 
-		if (files.length) {
-			if (debug) console.log(`Files in ${folder.name}:`);
+	for (const folder of folders_nsz) {
+		if (!['base', 'dlc', 'updates'].includes(folder.name)) continue;
 
-			sheet.column(1).setWidth(93);
-			sheet.column(2).setWidth(18);
-			sheet.column(3).setWidth(12);
-			sheet.column(4).setWidth(95);
+		if (debug) console.log(folder.name);
 
-			sheet.cell(1,1).string('Name');
-			sheet.cell(1,2).string('Date updated');
-			sheet.cell(1,3).string('Size');
-			sheet.cell(1,4).string('URL');
-			
-			let i = 2;
-			for (const file of files) {
-				if (debug) console.log(`${file.name} (${file.id})`);
-				
-				sheet.cell(i,1).string(file.name);
-				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:m:s'));
-				sheet.cell(i,3).string(file.size);
-				sheet.cell(i,4).string(file.webContentLink);
-				i++;
-			};
-		} else {
-			console.log('No files found.');
-		}
+		const table = {
+			base: 'NSZ Base',
+			dlc: 'NSZ DLC',
+			updates: 'NSZ Updates',
+		};
+
+		const folder_mod = {
+			name: table[folder.name],
+			id: folder.id
+		};
+
+		await addToWorkbook(folder_mod, driveAPI, driveId);
+
+		x++;
+	}
+
+	for (const folder of folders) {
+		if (!['Custom XCI', 'Custom XCI JP', 'XCI Trimmed', 'Special Collection'].includes(folder.name)) continue;
+
+		if (debug) console.log(folder.name);
+
+		await addToWorkbook(folder, driveAPI, driveId);
 
 		x++;
 	}
@@ -230,7 +245,62 @@ async function listDriveFiles(driveAPI, driveId = null) {
 	writeToDrive(driveAPI);
 }
 
-function writeToDrive(driveAPI) {
+async function addToWorkbook(folder, driveAPI, driveId = null) {
+	return new Promise(async (resolve, reject) => {
+		const options = {
+			fields: 'nextPageToken, files(id, name, size, webContentLink, modifiedTime, md5Checksum)',
+			orderBy: 'name',
+			pageSize: 1000,
+			q: `\'${folder.id}\' in parents and not mimeType = \'application/vnd.google-apps.folder\'`
+		};
+
+		const sheet = wb.addWorksheet(folder.name);
+	
+		if (driveId) {
+			options.driveId = driveId;
+			options.corpora = 'drive';
+			options.includeItemsFromAllDrives = true;
+			options.supportsAllDrives = true;
+		} else {
+			options.corpora = 'user';
+		}
+	
+		files = await retrieveAllFiles(options, driveAPI).catch(console.error);
+	
+		if (files.length) {
+			if (debug) console.log(`Files in ${folder.name}:`);
+	
+			sheet.column(1).setWidth(93);
+			sheet.column(2).setWidth(18);
+			sheet.column(3).setWidth(12);
+			sheet.column(4).setWidth(20);
+			sheet.column(5).setWidth(95);
+	
+			sheet.cell(1,1).string('Name');
+			sheet.cell(1,2).string('Date updated');
+			sheet.cell(1,4).string('Size');
+			sheet.cell(1,4).string('Hash');
+			sheet.cell(1,5).string('URL');
+			
+			let i = 2;
+			for (const file of files) {
+				if (debug) console.log(`${file.name} (${file.id})`);
+				
+				sheet.cell(i,1).string(file.name);
+				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:m:s'));
+				sheet.cell(i,3).string(file.size);
+				sheet.cell(i,4).string(file.md5Checksum);
+				sheet.cell(i,5).string(file.webContentLink);
+				i++;
+			};
+		} else {
+			console.log('No files found.');
+		}
+		resolve();
+	});
+}
+
+function writeToDrive(driveAPI, driveId = null) {
 	rl.question('Do you want to upload the spreadsheet to your google drive? [y/n]: ', async (answer) => {
 		if (answer === 'y') { 
 			const buf = Buffer.from(fs.readFileSync('output/spreadsheet.xlsx'), 'binary');
@@ -252,19 +322,8 @@ function writeToDrive(driveAPI) {
 			} else {
 				console.log('Creating the spreadsheet on the drive...')
 
-				const folderOptions = {
-					fields: 'nextPageToken, files(id, name)',
-					orderBy: 'name',
-					q: 'name contains \'hbg\' and mimeType = \'application/vnd.google-apps.folder\''
-				};
-
-				const result = await driveAPI.files.list(folderOptions).catch(console.error);
-
-				const folder = result.data.files[0];
-
 				const fileMetadata = {
-					name: '／hbg／ - Donator\'s Spreadsheet 3.0',
-					parents: [folder.id]
+					name: '／hbg／ - Donator\'s Spreadsheet 3.0'
 				};
 
 				const file = await driveAPI.files.create({
