@@ -1,0 +1,10 @@
+{
+	"_cß": "All of this assumes that the folder structure inside of your rootfolder is the one HBG uses",
+	"_c1": "If listNSP is enabled the script will try to list all files in the NSP folder inside of the rootfolder",
+	"listNSP": true,
+	"_c2": "If listNSZ is enabled the script will try to list all files in the NSZ folder inside of the rootfolder",
+	"listNSZ": true,
+	"_c3": "If listOthers is enabled the script will try to list all other files in the rootfolder",
+	"listOthers": true,
+	"spreadsheetId": "1vUeelFnYdTuoOWGKe8eVKmzhGhiaFW9u"
+}
