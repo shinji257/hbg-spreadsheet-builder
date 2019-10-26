@@ -9,8 +9,8 @@ if (flags.includes('--debug')) {
 	debug = true;
 }
 
-if (flags.includes('-share')) {
-	const argIndex = flags.indexOf('-share');
+if (flags.includes('-source')) {
+	const argIndex = flags.indexOf('-source');
 	cmdChoice = flags[argIndex + 1];
 	flags.splice(argIndex, 2);
 }
@@ -138,19 +138,22 @@ async function choice() {
 	}).catch(console.error);
 
 	const result = resp.data.drives;
-
-	console.log('1: Your own drive');
 	let x = 2;
-	for (const gdrive of result) {
-		console.log(`${x}: ${gdrive.name} (${gdrive.id})`);
-		x++;
+
+	let chosen = cmdChoice ? cmdChoice === '0' ? 1 : result.findIndex(e => e.id === cmdChoice) + x : null;
+
+	if (!chosen) {
+		console.log('1: Your own drive');
+		for (const gdrive of result) {
+			console.log(`${x++}: ${gdrive.name} (${gdrive.id})`);
+		}
+	
+		chosen = Number(await question('Enter your choice: '));
+	} else {
+		x += result.length;
 	}
 
-	let chosen = cmdChoice;
-
-	if (!chosen) chosen = await question('Enter your choice: ');
-
-	if (chosen === '1') {
+	if (chosen === 1) {
 		listDriveFiles();
 	} else if (chosen <= x && chosen > 1) {
 		selectedDrive = `${result[chosen - 2].name} (${result[chosen - 2].id})`;
@@ -249,7 +252,7 @@ async function listDriveFiles(driveId = null) {
 
 	if (!fs.existsSync('output/')) fs.mkdirSync('output/');
 
-	wb.write('output/spreadsheet.xlsx');
+	await wb.write('output/spreadsheet.xlsx');
 
 	console.log('Generation of NSP spreadsheet completed.');
 	console.log(`Took: ${moment.utc(moment().diff(startTime)).format('HH:mm:ss.SSS')}`);
@@ -295,7 +298,7 @@ async function addToWorkbook(folder, driveId = null) {
 		if (!folder) reject('No folder given');
 
 		const options = {
-			fields: 'nextPageToken, files(id, name, size, webContentLink, modifiedTime, md5Checksum, parents)',
+			fields: 'nextPageToken, files(id, name, size, webContentLink, modifiedTime, md5Checksum)',
 			orderBy: 'name',
 			pageSize: 1000,
 			q: `\'${folder.id}\' in parents and trashed = false and not mimeType = \'application/vnd.google-apps.folder\'`
@@ -316,18 +319,22 @@ async function addToWorkbook(folder, driveId = null) {
 	
 		if (files.length) {
 			if (debug) console.log(`Files in ${folder.name}:`);
-	
-			sheet.column(1).setWidth(93);
-			sheet.column(2).setWidth(18);
-			sheet.column(3).setWidth(12);
-			sheet.column(4).setWidth(20);
-			sheet.column(5).setWidth(95);
-	
-			sheet.cell(1,1).string('Name');
-			sheet.cell(1,2).string('Date updated');
-			sheet.cell(1,4).string('Size');
-			sheet.cell(1,4).string('Hash');
-			sheet.cell(1,5).string('URL');
+
+			const columns = [
+				{ width: 93, name: 'Name' },
+				{ width: 18, name: 'Date updated' },
+				{ width: 12, name: 'Size' },
+				{ width: 20, name: 'Hash' },
+				{ width: 95, name: 'URL' },
+			]
+
+			for (let entry in columns) {
+				entry = Number(entry);
+				sheet.column(entry + 1).setWidth(columns[entry].width);
+				sheet.cell(1, entry + 1).string(columns[entry].name);
+			}
+
+			sheet.row(1).freeze();
 			
 			let i = 2;
 			for (const file of files) {
