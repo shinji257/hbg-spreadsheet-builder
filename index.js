@@ -256,7 +256,7 @@ async function listDriveFiles(driveId = null) {
 
 	if (!fs.existsSync('output/')) fs.mkdirSync('output/');
 
-	await wb.write('output/spreadsheet.xlsx');
+	await wb.write('./output/spreadsheet.xlsx');
 
 	console.log('Generation of NSP spreadsheet completed.');
 	console.log(`Took: ${moment.utc(moment().diff(startTime)).format('HH:mm:ss.SSS')}`);
@@ -378,7 +378,7 @@ async function writeToDrive(driveId = null) {
 
 async function doUpload(driveId = null) {
 	return new Promise(async (resolve, reject) => {
-		const buf = Buffer.from(fs.readFileSync('output/spreadsheet.xlsx'), 'binary');
+		const buf = Buffer.from(fs.readFileSync('./output/spreadsheet.xlsx'), 'binary');
 		const buffer = Uint8Array.from(buf);
 		var bufferStream = new stream.PassThrough();
 		bufferStream.end(buffer);
