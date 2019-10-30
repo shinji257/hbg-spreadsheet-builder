@@ -266,7 +266,7 @@ async function listDriveFiles(driveId = null) {
 
 		if (!driveAnswer) driveAnswer = await question(`Write to ${rootfolder ? rootfolder : selectedDrive}? [y/n]:`);
 		if (['y', 'Y', 'yes', 'yeS', 'yEs', 'yES', 'Yes', 'YeS', 'YEs', 'YES'].includes(driveAnswer)) {
-			writeToDrive(rootfolder ? rootfolder : driveId);
+			writeToDrive(driveId);
 		} else {
 			writeToDrive();
 		}
@@ -378,13 +378,9 @@ async function writeToDrive(driveId = null) {
 
 async function doUpload(driveId = null) {
 	return new Promise(async (resolve, reject) => {
-		const buf = Buffer.from(fs.readFileSync('./output/spreadsheet.xlsx'), 'binary');
-		const buffer = Uint8Array.from(buf);
-		var bufferStream = new stream.PassThrough();
-		bufferStream.end(buffer);
 		const media = {
 			mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			body: bufferStream,
+			body: fs.createReadStream('./output/spreadsheet.xlsx'),
 		};
 	
 		if (spreadsheetId) {	
@@ -402,14 +398,27 @@ async function doUpload(driveId = null) {
 			};
 	
 			if (driveId) {
-				fileMetadata.parents = [driveId];
+				if (cmdRootFolder) {
+					fileMetadata.parents = [cmdRootFolder];
+				} else {
+					fileMetadata.parents = [driveId];
+				}
 			}
 	
-			const file = await driveAPI.files.create({
+			const requestData = {
 				resource: fileMetadata,
 				media,
 				fields: 'id'
-			}).catch(console.error);
+			};
+
+			if (driveId) {
+				requestData.driveId = driveId;
+				requestData.corpora = 'drive';
+				requestData.includeItemsFromAllDrives = true;
+				requestData.supportsAllDrives = true;
+			}
+
+			const file = await driveAPI.files.create(requestData).catch(console.error);
 	
 			const config = {
 				spreadsheetId: file.data.id
