@@ -5,5 +5,6 @@
 	"_c2": "If listNSZ is enabled the script will try to list all files in the NSZ folder inside of the rootfolder",
 	"listNSZ": true,
 	"_c3": "If listOthers is enabled the script will try to list all other files in the rootfolder",
-	"listOthers": true
+	"listOthers": true,
+	"spreadsheetId": "1Ah86-3k2Ty224dEDc0S873vPE4dxBZpg"
 }

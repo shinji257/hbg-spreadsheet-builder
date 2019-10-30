@@ -39,8 +39,7 @@ const fs = require('fs');
 const readline = require('readline');
 const { google } = require('googleapis');
 const xl = require('excel4node');
-const moment = require('moment')
-const stream = require('stream');
+const moment = require('moment');
 
 let conf = {};
 
@@ -383,13 +382,23 @@ async function doUpload(driveId = null) {
 			body: fs.createReadStream('./output/spreadsheet.xlsx'),
 		};
 	
+		const requestData = {
+			media
+		};
+
+		if (driveId) {
+			requestData.driveId = driveId;
+			requestData.corpora = 'drive';
+			requestData.includeItemsFromAllDrives = true;
+			requestData.supportsAllDrives = true;
+		}
+
 		if (spreadsheetId) {	
 			console.log('Updating the spreadsheet on the drive...');
+
+			requestData.fileId = spreadsheetId;
 	
-			await driveAPI.files.update({
-				fileId: spreadsheetId,
-				media
-			}).catch(console.error);	  
+			await driveAPI.files.update(requestData).catch(console.error);	  
 		} else {
 			console.log('Creating the spreadsheet on the drive...')
 	
@@ -405,18 +414,8 @@ async function doUpload(driveId = null) {
 				}
 			}
 	
-			const requestData = {
-				resource: fileMetadata,
-				media,
-				fields: 'id'
-			};
-
-			if (driveId) {
-				requestData.driveId = driveId;
-				requestData.corpora = 'drive';
-				requestData.includeItemsFromAllDrives = true;
-				requestData.supportsAllDrives = true;
-			}
+			requestData.resource = fileMetadata;
+			requestData.fields = 'id'
 
 			const file = await driveAPI.files.create(requestData).catch(console.error);
 	
