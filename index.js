@@ -44,7 +44,7 @@ const stream = require('stream');
 
 let conf;
 
-if (fs.exists('./conf.json')) {
+if (fs.existsSync('./conf.json')) {
 	conf = require('./conf.json');
 }
 
