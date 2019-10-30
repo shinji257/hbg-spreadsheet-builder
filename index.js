@@ -48,9 +48,9 @@ if (fs.existsSync('./conf.json')) {
 	conf = require('./conf.json');
 }
 
-const listNSP = conf.listNSP || null;
-const listNSZ = conf.listNSZ || null;
-const listOthers = conf.listOthers || null;
+const listNSP = conf.listNSP || true;
+const listNSZ = conf.listNSZ || true;
+const listOthers = conf.listOthers || true;
 
 const wb = new xl.Workbook();
 
@@ -420,11 +420,9 @@ async function doUpload(driveId = null) {
 
 			const file = await driveAPI.files.create(requestData).catch(console.error);
 	
-			const config = {
-				spreadsheetId: file.data.id
-			};
+			conf.spreadsheetId = file.data.id;
 	
-			fs.writeFileSync('conf.json', JSON.stringify(config, null, '\t'));
+			fs.writeFileSync('conf.json', JSON.stringify(conf, null, '\t'));
 		}
 	
 		console.log('Done!');
