@@ -142,14 +142,14 @@ async function choice() {
 	}).catch(console.error);
 
 	const result = resp.data.drives;
-	let x = 2;
+	let x = 1;
 
-	let chosen = cmdChoice ? cmdChoice === '0' ? 1 : result.findIndex(e => e.id === cmdChoice) + x : null;
+	let chosen = cmdChoice || null;
 
 	if (!chosen) {
 		console.log('1: Your own drive');
 		for (const gdrive of result) {
-			console.log(`${x++}: ${gdrive.name} (${gdrive.id})`);
+			console.log(`${++x}: ${gdrive.name} (${gdrive.id})`);
 		}
 	
 		chosen = Number(await question('Enter your choice: '));
@@ -206,6 +206,24 @@ async function listDriveFiles(driveId = null) {
 	let folders = [];
 	let folders_nsz = [];
 
+	if (listNSZ) {
+		folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${res_folders[res_folders.map(e => e.name).indexOf('NSZ')].id}\' in parents`;
+	
+		const res_nsz = (await retrieveAllFiles(folderOptions).catch(console.error)).filter(folder => order_nsz.includes(folder.name));
+	
+		for (const folder of res_nsz) {
+			folders_nsz[order_nsz.indexOf(folder.name)] = folder
+		};
+
+		folders_nsz = folders_nsz.filter(arr => arr !== null);
+
+		await goThroughFolders(driveId, folders_nsz, ['base', 'dlc', 'updates'], {
+			base: 'NSZ Base',
+			dlc: 'NSZ DLC',
+			updates: 'NSZ Updates',
+		});
+	}
+
 	if (listNSP) {
 		folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${res_folders[res_folders.map(e => e.name).indexOf('NSP Dumps')].id}\' in parents`;
 
@@ -232,24 +250,6 @@ async function listDriveFiles(driveId = null) {
 		folders = folders.filter(arr => !!arr);
 	}
 
-	if (listNSZ) {
-		folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${res_folders[res_folders.map(e => e.name).indexOf('NSZ')].id}\' in parents`;
-	
-		const res_nsz = (await retrieveAllFiles(folderOptions).catch(console.error)).filter(folder => order_nsz.includes(folder.name));
-	
-		for (const folder of res_nsz) {
-			folders_nsz[order_nsz.indexOf(folder.name)] = folder
-		};
-
-		folders_nsz = folders_nsz.filter(arr => arr !== null);
-
-		await goThroughFolders(driveId, folders_nsz, ['base', 'dlc', 'updates'], {
-			base: 'NSZ Base',
-			dlc: 'NSZ DLC',
-			updates: 'NSZ Updates',
-		});
-	}
-
 	if (listOthers) {
 		await goThroughFolders(driveId, folders, ['Custom XCI', 'Custom XCI JP', 'XCI Trimmed', 'Special Collection']);
 	}
@@ -262,9 +262,11 @@ async function listDriveFiles(driveId = null) {
 	console.log(`Took: ${moment.utc(moment().diff(startTime)).format('HH:mm:ss.SSS')}`);
 
 	if (driveId) {
-		const driveAnswer = await question(`Write to ${selectedDrive}? [y/n]:`);
+		let driveAnswer = cmdUploadChoice;
+
+		if (!driveAnswer) driveAnswer = await question(`Write to ${rootfolder ? rootfolder : selectedDrive}? [y/n]:`);
 		if (['y', 'Y', 'yes', 'yeS', 'yEs', 'yES', 'Yes', 'YeS', 'YEs', 'YES'].includes(driveAnswer)) {
-			writeToDrive(driveId);
+			writeToDrive(rootfolder ? rootfolder : driveId);
 		} else {
 			writeToDrive();
 		}
@@ -361,7 +363,7 @@ async function addToWorkbook(folder, driveId = null) {
 async function writeToDrive(driveId = null) {
 	let answer = cmdUploadChoice;
 	
-	if (!cmdUploadChoice) answer = await question('Do you want to upload the spreadsheet to your google drive? [y/n]: ');
+	if (!answer) answer = await question('Do you want to upload the spreadsheet to your google drive? [y/n]: ');
 
 	if (answer === 'y') {
 		await doUpload(driveId)
