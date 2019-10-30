@@ -42,7 +42,7 @@ const xl = require('excel4node');
 const moment = require('moment')
 const stream = require('stream');
 
-let conf;
+let conf = {};
 
 if (fs.existsSync('./conf.json')) {
 	conf = require('./conf.json');
