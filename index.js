@@ -42,13 +42,17 @@ const xl = require('excel4node');
 const moment = require('moment')
 const stream = require('stream');
 
-const listNSP = require('./conf.json').listNSP || null;
-const listNSZ = require('./conf.json').listNSP || null;
-const listOthers = require('./conf.json').listNSP || null;
+let conf;
+
+if (fs.exists('./conf.json')) {
+	conf = require('./conf.json');
+}
+
+const listNSP = conf.listNSP || null;
+const listNSZ = conf.listNSZ || null;
+const listOthers = conf.listOthers || null;
 
 const wb = new xl.Workbook();
-
-const workbook = [];
 
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
 const TOKEN_PATH = 'token.json';
