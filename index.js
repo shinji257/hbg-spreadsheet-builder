@@ -349,7 +349,7 @@ async function addToWorkbook(folder, driveId = null) {
 				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:m:s'));
 				sheet.cell(i,3).string(file.size);
 				sheet.cell(i,4).string(file.md5Checksum);
-				sheet.cell(i,5).string(file.webContentLink);
+				sheet.cell(i,5).link(file.webContentLink);
 				i++;
 			};
 		} else {
