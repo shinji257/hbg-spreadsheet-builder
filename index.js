@@ -1,30 +1,22 @@
-const flags = process.argv.slice(2);
-let debug = false;
-let cmdChoice = null;
-let cmdRootFolder = null;
-let cmdUploadChoice = null;
+const progArgs = process.argv.slice(2);
+const flags = {};
+flags.auto = getArgument('auto', true, false);
+flags.debug = getArgument('debug', true, false);
+flags.choice = getArgument('source', false);
+flags.root = getArgument('root', false);
+flags.upload = getArgument('upload', false);
+flags.uploadDrive = getArgument('uploadDrive', false);
 
-if (flags.includes('--debug')) {
-	flags.splice(flags.indexOf('--debug'), 1);
-	debug = true;
-}
-
-if (flags.includes('-source')) {
-	const argIndex = flags.indexOf('-source');
-	cmdChoice = flags[argIndex + 1];
-	flags.splice(argIndex, 2);
-}
-
-if (flags.includes('-root')) {
-	const argIndex = flags.indexOf('-root');
-	cmdRootFolder = flags[argIndex + 1];
-	flags.splice(argIndex, 2);
-}
-
-if (flags.includes('-upload')) {
-	const argIndex = flags.indexOf('-upload');
-	cmdUploadChoice = flags[argIndex + 1];
-	flags.splice(argIndex, 2);
+function getArgument(name, isFlag, defaultValue = null) {
+	if (progArgs.includes(`-${name}`)) {
+		const index = progArgs.indexOf(`-${name}`);
+		if (!isFlag) {
+			var argValue = progArgs[index + 1];
+		}
+		progArgs.splice(index, isFlag ? 1 : 2);
+		return isFlag ? true : argValue;
+	}
+	return defaultValue;
 }
 
 function question(question) {
@@ -40,6 +32,7 @@ const readline = require('readline');
 const { google } = require('googleapis');
 const xl = require('excel4node');
 const moment = require('moment');
+const path = require('path');
 
 let conf = {};
 
@@ -145,6 +138,8 @@ async function choice() {
 
 	let chosen = cmdChoice || null;
 
+	if (!Number(chosen) && chosen !== null) chosen = result.findIndex(e => e.id === chosen) + 2;
+
 	if (!chosen) {
 		console.log('1: Your own drive');
 		for (const gdrive of result) {
@@ -152,6 +147,9 @@ async function choice() {
 		}
 	
 		chosen = Number(await question('Enter your choice: '));
+	} else if (!chosen && auto) {
+		console.error('Source argument invalid. Aborting auto.');
+		process.exit(1);
 	} else {
 		x += result.length;
 	}
@@ -183,6 +181,9 @@ async function listDriveFiles(driveId = null) {
 	let rootfolder = cmdRootFolder;
 
 	if (!cmdRootFolder) rootfolder = await question('Whats the root folder id: ');
+	if (!flags.root && auto) {
+		debugMessage('Invalid root argument. Assuming shared drive as root.');
+	}
 
 	if (driveId) {
 		folderOptions.driveId = driveId;
@@ -264,6 +265,10 @@ async function listDriveFiles(driveId = null) {
 		let driveAnswer = cmdUploadChoice;
 
 		if (!driveAnswer) driveAnswer = await question(`Write to ${rootfolder ? rootfolder : selectedDrive}? [y/n]:`);
+		if (!driveAnswer && auto) {
+			debugMessage('Invalid uploadDrive argument. Assuming no upload to shared drive.');
+			writeToDrive();
+		}
 		if (['y', 'Y', 'yes', 'yeS', 'yEs', 'yES', 'Yes', 'YeS', 'YEs', 'YES'].includes(driveAnswer)) {
 			writeToDrive(driveId);
 		} else {
@@ -281,7 +286,7 @@ function goThroughFolders(driveId, folders, includeIndex, nameTable = null) {
 		for (const folder of folders) {
 			if (!includeIndex.includes(folder.name)) continue;
 	
-			if (debug) console.log(folder.name);
+			debugMessage(folder.name);
 	
 			if (nameTable) {
 				const folder_mod = {
@@ -323,7 +328,7 @@ async function addToWorkbook(folder, driveId = null) {
 		files = await retrieveAllFiles(options).catch(console.error);
 	
 		if (files.length) {
-			if (debug) console.log(`Files in ${folder.name}:`);
+			debugMessage(`Files in ${folder.name}:`);
 
 			const columns = [
 				{ width: 93, name: 'Name' },
@@ -343,13 +348,16 @@ async function addToWorkbook(folder, driveId = null) {
 			
 			let i = 2;
 			for (const file of files) {
-				if (debug) console.log(`${file.name} (${file.id})`);
+				debugMessage(`${file.name} (${file.id})`);
+
+				const extension = path.extname(file.name);
+				if (!['.nsp', '.nsz', '.xci'].includes(extension)) continue;
 				
 				sheet.cell(i,1).string(file.name);
 				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:m:s'));
 				sheet.cell(i,3).string(file.size);
 				sheet.cell(i,4).string(file.md5Checksum);
-				sheet.cell(i,5).link(file.webContentLink);
+				sheet.cell(i,5).string(file.webContentLink);
 				i++;
 			};
 		} else {
@@ -363,22 +371,28 @@ async function writeToDrive(driveId = null) {
 	let answer = cmdUploadChoice;
 	
 	if (!answer) answer = await question('Do you want to upload the spreadsheet to your google drive? [y/n]: ');
+	if (!flags.upload && auto) {
+		debugMessage('Invalid upload argument. Assuming to not upload the file.')
+	}
 
 	if (answer === 'y') {
 		await doUpload(driveId)
 	}
 
-	process.stdout.write('\nPress any key to exit...');
-
-	process.stdin.setRawMode(true);
-	process.stdin.resume();
-	process.stdin.on('data', process.exit.bind(process, 0));
+	if (!auto) {
+		process.stdout.write('\nPress any key to exit...');
+	
+		process.stdin.setRawMode(true);
+		process.stdin.resume();
+		process.stdin.on('data', process.exit.bind(process, 0));
+	} else {
+		process.exit(0);
+	}
 }
 
 async function doUpload(driveId = null) {
 	return new Promise(async (resolve, reject) => {
 		const media = {
-			mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 			body: fs.createReadStream('./output/spreadsheet.xlsx'),
 		};
 	
@@ -452,4 +466,10 @@ function retrievePageOfFiles(options, result) {
 			resolve(result);
 		}
 	});
+}
+
+function debugMessage(text) {
+	if (flags.debug) {
+		console.log(text);
+	}
 }
