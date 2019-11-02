@@ -136,7 +136,7 @@ async function choice() {
 	const result = resp.data.drives;
 	let x = 1;
 
-	let chosen = cmdChoice || null;
+	let chosen = flags.choice || null;
 
 	if (!Number(chosen) && chosen !== null) chosen = result.findIndex(e => e.id === chosen) + 2;
 
@@ -160,7 +160,7 @@ async function choice() {
 		selectedDrive = `${result[chosen - 2].name} (${result[chosen - 2].id})`;
 		listDriveFiles(result[chosen - 2].id);
 	} else {
-		if (cmdChoice) cmdChoice = null;
+		if (flags.choice) flags.choice = null;
 		choice();
 	}
 }
@@ -178,9 +178,9 @@ async function listDriveFiles(driveId = null) {
 		orderBy: 'name'
 	};
 
-	let rootfolder = cmdRootFolder;
+	let rootfolder = flags.root;
 
-	if (!cmdRootFolder) rootfolder = await question('Whats the root folder id: ');
+	if (!flags.root) rootfolder = await question('Whats the root folder id: ');
 	if (!flags.root && auto) {
 		debugMessage('Invalid root argument. Assuming shared drive as root.');
 	}
@@ -262,7 +262,7 @@ async function listDriveFiles(driveId = null) {
 	console.log(`Took: ${moment.utc(moment().diff(startTime)).format('HH:mm:ss.SSS')}`);
 
 	if (driveId) {
-		let driveAnswer = cmdUploadChoice;
+		let driveAnswer = flags.uploadDrive;
 
 		if (!driveAnswer) driveAnswer = await question(`Write to ${rootfolder ? rootfolder : selectedDrive}? [y/n]:`);
 		if (!driveAnswer && auto) {
@@ -368,10 +368,10 @@ async function addToWorkbook(folder, driveId = null) {
 }
 
 async function writeToDrive(driveId = null) {
-	let answer = cmdUploadChoice;
+	let answer = flags.upload;
 	
 	if (!answer) answer = await question('Do you want to upload the spreadsheet to your google drive? [y/n]: ');
-	if (!flags.upload && auto) {
+	if (!answer && auto) {
 		debugMessage('Invalid upload argument. Assuming to not upload the file.')
 	}
 
@@ -421,8 +421,8 @@ async function doUpload(driveId = null) {
 			};
 	
 			if (driveId) {
-				if (cmdRootFolder) {
-					fileMetadata.parents = [cmdRootFolder];
+				if (flags.root) {
+					fileMetadata.parents = [flags.root];
 				} else {
 					fileMetadata.parents = [driveId];
 				}
