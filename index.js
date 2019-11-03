@@ -42,7 +42,8 @@ if (fs.existsSync('./conf.json')) {
 
 const listNSP = conf.listNSP || true;
 const listNSZ = conf.listNSZ || true;
-const listOthers = conf.listOthers || true;
+const listXCI = conf.listXCI || true;
+const listCustomXCI = conf.listCustomXCI || true;
 
 const wb = new xl.Workbook();
 
@@ -166,7 +167,7 @@ async function choice() {
 }
 
 async function listDriveFiles(driveId = null) {
-	if (!listNSP && !listNSZ && !listOthers) {
+	if (!listNSP && !listNSZ && !listXCI) {
 		console.log('Nothing to add to the spreadsheet')
 		process.exit();
 	}
@@ -250,8 +251,12 @@ async function listDriveFiles(driveId = null) {
 		folders = folders.filter(arr => !!arr);
 	}
 
-	if (listOthers) {
-		await goThroughFolders(driveId, folders, ['Custom XCI', 'Custom XCI JP', 'XCI Trimmed', 'Special Collection']);
+	if (listXCI) {
+		await goThroughFolders(driveId, folders, ['XCI Trimmed']);
+	}
+
+	if (listCustomXCI) {
+		await goThroughFolders(driveId, folders, ['Custom XCI', 'Custom XCI JP', 'Special Collection']);
 	}
 
 	if (!fs.existsSync('output/')) fs.mkdirSync('output/');

@@ -4,7 +4,9 @@
 	"listNSP": true,
 	"_c2": "If listNSZ is enabled the script will try to list all files in the NSZ folder inside of the rootfolder",
 	"listNSZ": true,
-	"_c3": "If listOthers is enabled the script will try to list all other files in the rootfolder",
-	"listOthers": true,
+	"_c3": "If listXCI is enabled the script will try to list all XCI Trimmed files in the rootfolder",
+	"listXCI": true,
+	"_c4": "If listCustomXCI is enabled the script will try to list all Custom XCI files in the rootfolder",
+	"listCustomXCI": false,
 	"spreadsheetId": "1Ah86-3k2Ty224dEDc0S873vPE4dxBZpg"
 }
