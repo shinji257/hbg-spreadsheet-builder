@@ -7,6 +7,5 @@
 	"_c3": "If listXCI is enabled the script will try to list all XCI Trimmed files in the rootfolder",
 	"listXCI": true,
 	"_c4": "If listCustomXCI is enabled the script will try to list all Custom XCI files in the rootfolder",
-	"listCustomXCI": false,
-	"spreadsheetId": "1Ah86-3k2Ty224dEDc0S873vPE4dxBZpg"
+	"listCustomXCI": false
 }
