@@ -208,41 +208,53 @@ async function listDriveFiles(driveId = null) {
 	let folders_nsz = [];
 
 	if (listNSZ) {
-		folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${res_folders[res_folders.map(e => e.name).indexOf('NSZ')].id}\' in parents`;
-	
-		const res_nsz = (await retrieveAllFiles(folderOptions).catch(console.error)).filter(folder => order_nsz.includes(folder.name));
-	
-		for (const folder of res_nsz) {
-			folders_nsz[order_nsz.indexOf(folder.name)] = folder
-		};
+		const nspFolder = res_folders[res_folders.map(e => e.name).indexOf('NSZ')];
 
-		folders_nsz = folders_nsz.filter(arr => arr !== null);
-
-		await goThroughFolders(driveId, folders_nsz, ['base', 'dlc', 'updates'], {
-			base: 'NSZ Base',
-			dlc: 'NSZ DLC',
-			updates: 'NSZ Updates',
-		});
+		if(nspFolder) {
+			folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${nspFolder.id}\' in parents`;
+		
+			const res_nsz = (await retrieveAllFiles(folderOptions).catch(console.error)).filter(folder => order_nsz.includes(folder.name));
+		
+			for (const folder of res_nsz) {
+				folders_nsz[order_nsz.indexOf(folder.name)] = folder
+			};
+	
+			folders_nsz = folders_nsz.filter(arr => arr !== null);
+	
+			await goThroughFolders(driveId, folders_nsz, ['base', 'dlc', 'updates'], {
+				base: 'NSZ Base',
+				dlc: 'NSZ DLC',
+				updates: 'NSZ Updates',
+			});
+		} else {
+			console.error('No NSP Folder found');
+		}
 	}
 
 	if (listNSP) {
-		folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${res_folders[res_folders.map(e => e.name).indexOf('NSP Dumps')].id}\' in parents`;
+		const nszFolder = res_folders[res_folders.map(e => e.name).indexOf('NSP Dumps')];
 
-		const temp = await retrieveAllFiles(folderOptions).catch(console.error);
+		if (!nszFolder) {
+			folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${nszFolder.id}\' in parents`;
 	
-		const res_nsp = res_folders.concat(temp).filter(folder => order.includes(folder.name));
+			const temp = await retrieveAllFiles(folderOptions).catch(console.error);
+		
+			const res_nsp = res_folders.concat(temp).filter(folder => order.includes(folder.name));
+		
+			for (const folder of res_nsp) {
+				folders[order.indexOf(folder.name)] = folder
+			};
 	
-		for (const folder of res_nsp) {
-			folders[order.indexOf(folder.name)] = folder
-		};
-
-		folders = folders.filter(arr => !!arr);
-	
-		await goThroughFolders(driveId, folders, ['base', 'dlc', 'updates'], {
-			base: 'NSP Base',
-			dlc: 'NSP DLC',
-			updates: 'NSP Updates',
-		});
+			folders = folders.filter(arr => !!arr);
+		
+			await goThroughFolders(driveId, folders, ['base', 'dlc', 'updates'], {
+				base: 'NSP Base',
+				dlc: 'NSP DLC',
+				updates: 'NSP Updates',
+			});
+		} else {
+			console.error('No NSZ Folder found');
+		}
 	} else {
 		for (const folder of res_folders.filter(folder => order.includes(folder.name))) {
 			folders[order.indexOf(folder.name)] = folder
