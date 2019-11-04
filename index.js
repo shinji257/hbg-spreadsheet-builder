@@ -298,7 +298,7 @@ async function listDriveFiles(driveId = null) {
 
 function goThroughFolders(driveId, folders, includeIndex, nameTable = null) {
 	return new Promise(async (resolve, reject) => {
-		if (!folders || !includeIndex) reject('Missing parameters');
+		if (!folders) reject('Missing parameters');
 
 		for (const folder of folders) {
 			if (!includeIndex.includes(folder.name)) continue;
