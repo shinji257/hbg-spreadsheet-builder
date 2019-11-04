@@ -40,10 +40,10 @@ if (fs.existsSync('./conf.json')) {
 	conf = require('./conf.json');
 }
 
-const listNSP = conf.listNSP || true;
-const listNSZ = conf.listNSZ || true;
-const listXCI = conf.listXCI || true;
-const listCustomXCI = conf.listCustomXCI || true;
+conf.listNSP = conf.listNSP || false;
+conf.listNSZ = conf.listNSZ || false;
+conf.listXCI = conf.listXCI || false;
+conf.listCustomXCI = conf.listCustomXCI || false;
 
 const wb = new xl.Workbook();
 
@@ -138,8 +138,16 @@ async function choice() {
 	let x = 1;
 
 	let chosen = flags.choice || null;
+	const chosenIsNaN = isNaN(Number(chosen));
 
-	if (!Number(chosen) && chosen !== null) chosen = result.findIndex(e => e.id === chosen) + 2;
+	if (chosenIsNaN && chosen !== null) {
+		const foundIndex = result.findIndex(e => e.id === chosen);
+
+		if (foundIndex < 0) chosen = null;
+		else chosen = foundIndex + 2;
+	}
+
+	chosen = Number(chosen);
 
 	if (!chosen && !flags.auto) {
 		console.log('1: Your own drive');
@@ -167,7 +175,7 @@ async function choice() {
 }
 
 async function listDriveFiles(driveId = null) {
-	if (!listNSP && !listNSZ && !listXCI) {
+	if (!conf.listNSP && !conf.listNSZ && !conf.listXCI && !conf.listCustomXCI) {
 		console.log('Nothing to add to the spreadsheet')
 		process.exit();
 	}
@@ -207,7 +215,7 @@ async function listDriveFiles(driveId = null) {
 	let folders = [];
 	let folders_nsz = [];
 
-	if (listNSZ) {
+	if (conf.listNSZ) {
 		const nspFolder = res_folders[res_folders.map(e => e.name).indexOf('NSZ')];
 
 		if(nspFolder) {
@@ -231,10 +239,10 @@ async function listDriveFiles(driveId = null) {
 		}
 	}
 
-	if (listNSP) {
+	if (conf.listNSP) {
 		const nszFolder = res_folders[res_folders.map(e => e.name).indexOf('NSP Dumps')];
 
-		if (!nszFolder) {
+		if (nszFolder) {
 			folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${nszFolder.id}\' in parents`;
 	
 			const temp = await retrieveAllFiles(folderOptions).catch(console.error);
@@ -263,11 +271,11 @@ async function listDriveFiles(driveId = null) {
 		folders = folders.filter(arr => !!arr);
 	}
 
-	if (listXCI) {
+	if (conf.listXCI) {
 		await goThroughFolders(driveId, folders, ['XCI Trimmed']);
 	}
 
-	if (listCustomXCI) {
+	if (conf.listCustomXCI) {
 		await goThroughFolders(driveId, folders, ['Custom XCI', 'Custom XCI JP', 'Special Collection']);
 	}
 
