@@ -22,7 +22,7 @@ function getArgument(name, isFlag, defaultValue = null) {
 function question(question) {
 	return new Promise((resolve, reject) => {
 		rl.question(question, (answer) => {
-			resolve(answer)
+			resolve(answer);
 		});
 	});
 }
@@ -121,7 +121,7 @@ function getAccessToken(oAuth2Client, callback) {
 
 			driveAPI = google.drive({
 				version: 'v3',
-				auth: oAuth2Client
+				auth: oAuth2Client,
 			});
 	
 			callback();
@@ -316,7 +316,7 @@ function goThroughFolders(driveId, folders, includeIndex, nameTable = null) {
 			if (nameTable) {
 				const folder_mod = {
 					name: nameTable[folder.name],
-					id: folder.id
+					id: folder.id,
 				};
 
 				await addToWorkbook(folder_mod, driveId);
@@ -336,7 +336,7 @@ async function addToWorkbook(folder, driveId = null) {
 			fields: 'nextPageToken, files(id, name, size, webContentLink, modifiedTime, md5Checksum)',
 			orderBy: 'name',
 			pageSize: 1000,
-			q: `\'${folder.id}\' in parents and trashed = false and not mimeType = \'application/vnd.google-apps.folder\'`
+			q: `\'${folder.id}\' in parents and trashed = false and not mimeType = \'application/vnd.google-apps.folder\'`,
 		};
 
 		const sheet = wb.addWorksheet(folder.name);
@@ -357,10 +357,10 @@ async function addToWorkbook(folder, driveId = null) {
 
 			const columns = [
 				{ width: 93, name: 'Name' },
-				{ width: 18, name: 'Date updated' },
-				{ width: 12, name: 'Size' },
-				{ width: 20, name: 'Hash' },
-				{ width: 95, name: 'URL' },
+				{ width: 20, name: 'Date updated' },
+				{ width: 15, name: 'Size' },
+				{ width: 38, name: 'Hash' },
+				{ width: 15, name: 'URL' },
 			]
 
 			for (let entry in columns) {
@@ -382,9 +382,9 @@ async function addToWorkbook(folder, driveId = null) {
 				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:m:s'));
 				sheet.cell(i,3).string(file.size);
 				sheet.cell(i,4).string(file.md5Checksum);
-				sheet.cell(i,5).string(file.webContentLink);
+				sheet.cell(i,5).link(file.webContentLink, 'DOWNLOAD');
 				i++;
-			};
+			}
 		} else {
 			console.log('No files found.');
 		}
@@ -397,11 +397,11 @@ async function writeToDrive(driveId = null) {
 	
 	if (!answer && !flags.auto) answer = await question('Do you want to upload the spreadsheet to your google drive? [y/n]: ');
 	if (!answer && flags.auto) {
-		debugMessage('Invalid upload argument. Assuming to not upload the file.')
+		debugMessage('Invalid upload argument. Assuming to not upload the file.');
 	}
 
 	if (answer === 'y') {
-		await doUpload(driveId)
+		await doUpload(driveId);
 	}
 
 	if (!flags.auto) {
@@ -418,11 +418,16 @@ async function writeToDrive(driveId = null) {
 async function doUpload(driveId = null) {
 	return new Promise(async (resolve, reject) => {
 		const media = {
+			mimeType: 'application/vnd.ms-excel',
 			body: fs.createReadStream('./output/spreadsheet.xlsx'),
 		};
+
+		const fileMetadata = {
+			mimeType: 'application/vnd.google-apps.spreadsheet',
+		}
 	
 		const requestData = {
-			media
+			media,
 		};
 
 		if (driveId) {
@@ -435,15 +440,14 @@ async function doUpload(driveId = null) {
 		if (spreadsheetId) {	
 			console.log('Updating the spreadsheet on the drive...');
 
+			requestData.resource = fileMetadata;
 			requestData.fileId = spreadsheetId;
 	
 			await driveAPI.files.update(requestData).catch(console.error);	  
 		} else {
-			console.log('Creating the spreadsheet on the drive...')
+			console.log('Creating the spreadsheet on the drive...');
 	
-			const fileMetadata = {
-				name: '／hbg／ - Donator\'s Spreadsheet 3.0'
-			};
+			fileMetadata.name = '／hbg／ - Donator\'s Spreadsheet 3.0';
 	
 			if (driveId) {
 				if (flags.root) {
@@ -454,7 +458,7 @@ async function doUpload(driveId = null) {
 			}
 	
 			requestData.resource = fileMetadata;
-			requestData.fields = 'id'
+			requestData.fields = 'id';
 
 			const file = await driveAPI.files.create(requestData).catch(console.error);
 	
