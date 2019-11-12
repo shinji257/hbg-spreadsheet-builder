@@ -48,18 +48,22 @@ If you use your own `My Drive` then please share the folder and use Tinfoil.io f
 ### Examples of automation
 Now that we established the flags lets see some examples:
 
-`node index.js -auto -source SHARED_DRIVE_ID`
+`node index.js -auto -source 1`
 
 This will look for folders called `NSP Dump`, `NSZ`, `XCI Trimmed`, `Custom XCI` in the provided shared drive's root directory. (You can configure what types of files it will look for using the `config.json`)
 
+`node index.js -auto -source SHARED_DRIVE_ID`
+
+This will look for the same folders in the shared drives root directory if not specified otherwise
+
 `node index.js -auto -source SHARED_DRIVE_ID -root FOLDER_ID`
 
-This will do almost the same as not providing a folder id. The only difference being that it will look for the folders in the provided folder instead of the shared drive's root directory.
+This will do almost the same as not providing a folder id. The only difference being that it will look for the folders in the provided folder instead of the shared drive's root directory
 
 `node index.js -auto -source SHARED_DRIVE_ID -upload y`
 
-This will upload the resulting index to your Google `mydrive` location.
+This will upload the resulting index to your Google `mydrive` location
 
 `node index.js -auto -source SHARED_DRIVE_ID -uploadDrive y -upload y`
 
-This will upload the resulting file to the source shared drive if one was provided. This cant be used without also setting upload to `y`.
+This will upload the resulting file to the source shared drive if one was provided. This cant be used without also setting upload to `y`
