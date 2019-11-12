@@ -130,11 +130,10 @@ function getAccessToken(oAuth2Client, callback) {
 }
 
 async function choice() {
-	const resp = await driveAPI.drives.list({
+	const result = await retrieveAllDrives({
 		fields: 'drives(id, name)'
 	}).catch(console.error);
-
-	const result = resp.data.drives;
+	
 	let x = 1;
 
 	let chosen = flags.choice || null;
@@ -490,6 +489,31 @@ function retrievePageOfFiles(options, result) {
 			options.pageToken = resp.data.nextPageToken;
 	
 			const res = await retrievePageOfFiles(options, result).catch(console.error);
+			resolve(res);
+		} else {
+			resolve(result);
+		}
+	});
+}
+
+function retrieveAllDrives(options) {
+	return new Promise(async (resolve, reject) => {
+		const result = await retrievePageOfDrives(options, []).catch(console.error);
+	
+		resolve(result);
+	});
+}
+
+function retrievePageOfDrives(options, result) {
+	return new Promise(async (resolve, reject) => {
+		const resp = await driveAPI.drives.list(options).catch(console.error);
+	
+		result = result.concat(resp.data.drives);
+	
+		if (resp.data.nextPageToken) {
+			options.pageToken = resp.data.nextPageToken;
+	
+			const res = await retrievePageOfDrives(options, result).catch(console.error);
 			resolve(res);
 		} else {
 			resolve(result);
