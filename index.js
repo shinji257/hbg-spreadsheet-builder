@@ -131,6 +131,7 @@ function getAccessToken(oAuth2Client, callback) {
 
 async function choice() {
 	const result = await retrieveAllDrives({
+		pageSize: 100,
 		fields: 'nextPageToken, drives(id, name)'
 	}).catch(console.error);
 	
@@ -182,6 +183,7 @@ async function listDriveFiles(driveId = null) {
 	const startTime = moment.now();
 
 	const folderOptions = {
+		pageSize: 100,
 		fields: 'nextPageToken, files(id, name)',
 		orderBy: 'name'
 	};
@@ -334,7 +336,7 @@ async function addToWorkbook(folder, driveId = null) {
 		const options = {
 			fields: 'nextPageToken, files(id, name, size, webContentLink, modifiedTime, md5Checksum)',
 			orderBy: 'name',
-			pageSize: 1000,
+			pageSize: 100,
 			q: `\'${folder.id}\' in parents and trashed = false and not mimeType = \'application/vnd.google-apps.folder\'`,
 		};
 
