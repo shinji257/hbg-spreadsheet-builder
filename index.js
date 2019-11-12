@@ -131,7 +131,6 @@ function getAccessToken(oAuth2Client, callback) {
 
 async function choice() {
 	const result = await retrieveAllDrives({
-		pageSize: 100,
 		fields: 'nextPageToken, drives(id, name)'
 	}).catch(console.error);
 	
