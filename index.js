@@ -44,19 +44,14 @@ conf.listNSP = conf.listNSP || false;
 conf.listNSZ = conf.listNSZ || false;
 conf.listXCI = conf.listXCI || false;
 conf.listCustomXCI = conf.listCustomXCI || false;
+conf.spreadsheetId = conf.spreadsheetId || '';
 
 const wb = new xl.Workbook();
 
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
 const TOKEN_PATH = 'token.json';
-let spreadsheetId;
 let driveAPI;
 let selectedDrive;
-
-if (fs.existsSync('conf.json')) {
-	const config = require('./conf.json');
-	spreadsheetId = config.spreadsheetId;
-}
 
 const rl = readline.createInterface({
 	input: process.stdin,
@@ -276,6 +271,25 @@ async function listDriveFiles(driveId = null) {
 	}
 
 	if (conf.listCustomXCI) {
+		const customXCIFolder = folders[folders.map(e => e.name).indexOf('Custom XCI')];
+
+		if (customXCIFolder) {
+			folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${customXCIFolder.id}\' in parents`;
+
+			const temp = await retrieveAllFiles(folderOptions).catch(console.error);
+		
+			const res_xci = folders.concat(temp).filter(folder => order.includes(folder.name));
+		
+			for (const folder of res_xci) {
+				folders[order.indexOf(folder.name)] = folder
+			};
+
+			folders = folders.filter(arr => !!arr);
+		
+			await goThroughFolders(driveId, folders, ['base', 'dlc', 'updates']);
+		} else {
+			console.error('No NSP folder found');
+		}
 		await goThroughFolders(driveId, folders, ['Custom XCI', 'Custom XCI JP', 'Special Collection']);
 	}
 
@@ -437,11 +451,11 @@ async function doUpload(driveId = null) {
 			requestData.supportsAllDrives = true;
 		}
 
-		if (spreadsheetId) {	
+		if (conf.spreadsheetId) {	
 			console.log('Updating the spreadsheet on the drive...');
 
 			requestData.resource = fileMetadata;
-			requestData.fileId = spreadsheetId;
+			requestData.fileId = conf.spreadsheetId;
 	
 			await driveAPI.files.update(requestData).catch(console.error);	  
 		} else {
