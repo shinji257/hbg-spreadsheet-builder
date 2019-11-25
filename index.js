@@ -393,7 +393,8 @@ async function addToWorkbook(folder, driveId = null) {
 				
 				sheet.cell(i,1).string(file.name);
 				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:m:s'));
-				sheet.cell(i,3).string(file.size);
+				sheet.cell(i,3).string(getFormattedSize(file.size));
+				sheet.cell(i,3).comment(`${file.size} B`);
 				sheet.cell(i,4).string(file.md5Checksum);
 				sheet.cell(i,5).link(file.webContentLink, 'DOWNLOAD');
 				i++;
@@ -533,6 +534,32 @@ function retrievePageOfDrives(options, result) {
 			resolve(result);
 		}
 	});
+}
+
+const sizeSuffix = [
+	'B',
+	'KB',
+	'MB',
+	'GB',
+	'TB',
+	'PB',
+	'EB',
+	'ZB',
+	'YB'
+];
+
+function getFormattedSize(size, decimals = 2, round = 0) {
+	const tempSize = size / 2**10;
+	
+	if (tempSize < 1) {
+		return `${floorToDecimal(size, decimals)} ${sizeSuffix[round]}`;
+	}
+
+	return getFormattedSize(tempSize, decimals, ++round);
+}
+
+function floorToDecimal(number, decimals) {
+	return Math.floor(number * ( 10 ** decimals )) / 10 ** decimals;
 }
 
 function debugMessage(text) {
