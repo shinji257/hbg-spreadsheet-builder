@@ -392,7 +392,7 @@ async function addToWorkbook(folder, driveId = null) {
 				if (!['.nsp', '.nsz', '.xci'].includes(extension)) continue;
 				
 				sheet.cell(i,1).string(file.name);
-				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:m:s'));
+				sheet.cell(i,2).string(moment(file.modifiedTime).format('M/D/YYYY H:mm:ss'));
 				sheet.cell(i,3).string(getFormattedSize(file.size));
 				sheet.cell(i,3).comment(`${file.size} B`);
 				sheet.cell(i,4).string(file.md5Checksum);
