@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/BigBrainAFK/hbg-spreadsheet-builder",
   "dependencies": {
+    "cli-progress": "^3.8.0",
     "excel4node": "^1.7.2",
     "googleapis": "^45.0.0",
     "moment": "^2.24.0"

@@ -1,4 +1,4 @@
-{	
+{
 	"_cß": "All of this assumes that the folder structure inside of your rootfolder is the one HBG uses",
 	"_c1": "If listNSP is enabled the script will try to list all files in the NSP folder inside of the rootfolder",
 	"listNSP": true,
@@ -7,5 +7,6 @@
 	"_c3": "If listXCI is enabled the script will try to list all XCI Trimmed files in the rootfolder",
 	"listXCI": true,
 	"_c4": "If listCustomXCI is enabled the script will try to list all Custom XCI files in the rootfolder",
-	"listCustomXCI": false
+	"listCustomXCI": false,
+	"spreadsheetId": ""
 }

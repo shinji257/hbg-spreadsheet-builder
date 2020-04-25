@@ -33,6 +33,8 @@ const { google } = require('googleapis');
 const xl = require('excel4node');
 const moment = require('moment');
 const path = require('path');
+const cliProgress = require('cli-progress');
+const { Worker } = require('worker_threads');
 
 let conf = {};
 
@@ -46,10 +48,25 @@ conf.listXCI = conf.listXCI || false;
 conf.listCustomXCI = conf.listCustomXCI || false;
 conf.spreadsheetId = conf.spreadsheetId || '';
 
+const progBar = new cliProgress.SingleBar({
+	format: 'Adding files: [{bar}] {percentage}% | ETA: {eta}s | {value}/{total} files',
+	etaBuffer: 100
+}, cliProgress.Presets.shades_classic);
+
+const folderBar = new cliProgress.SingleBar({
+	format: 'Getting folders: [{bar}] {percentage}% | ETA: {eta}s | {value}/{total} folders',
+	etaBuffer: 100
+}, cliProgress.Presets.shades_classic);
+
+setInterval(() => {
+	if (progBar.isActive) progBar.updateETA();
+	if (folderBar.isActive) folderBar.updateETA();
+}, 1000);
+
 const wb = new xl.Workbook();
 
 const SCOPES = ['https://www.googleapis.com/auth/drive'];
-const TOKEN_PATH = 'token.json';
+const TOKEN_PATH = 'gdrive.token';
 let driveAPI;
 let selectedDrive;
 
@@ -71,24 +88,50 @@ fs.readFile('credentials.json', (err, content) => {
  * @param {function} callback The callback to call with the authorized client.
  */
 function authorize(credentials, callback) {
-	const {
-		client_secret,
-		client_id,
-		redirect_uris
-	} = credentials.installed;
-	const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+	if (credentials.type && credentials.type === "service_account") {
+		const {
+			client_email,
+			private_key
+		} = credentials;
 
-	fs.readFile(TOKEN_PATH, (err, token) => {
-		if (err) return getAccessToken(oAuth2Client, callback);
-		oAuth2Client.setCredentials(JSON.parse(token));
-
-		driveAPI = google.drive({
-			version: 'v3',
-			auth: oAuth2Client
+		const jwtClient = new google.auth.JWT(
+			client_email,
+			null,
+			private_key,
+			['https://www.googleapis.com/auth/drive']);
+	
+		fs.readFile(TOKEN_PATH, (err, token) => {
+			if (err) return getAccessTokenJWT(jwtClient, callback);
+			jwtClient.setCredentials(JSON.parse(token));
+	
+			driveAPI = google.drive({
+				version: 'v3',
+				auth: jwtClient
+			});
+	
+			callback();
 		});
+	} else {
+		const {
+			client_secret,
+			client_id,
+			redirect_uris
+		} = credentials.installed;
 
-		callback();
-	});
+		const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+	
+		fs.readFile(TOKEN_PATH, (err, token) => {
+			if (err) return getAccessToken(oAuth2Client, callback);
+			oAuth2Client.setCredentials(JSON.parse(token));
+	
+			driveAPI = google.drive({
+				version: 'v3',
+				auth: oAuth2Client
+			});
+	
+			callback();
+		});
+	}
 }
 
 /**
@@ -116,7 +159,7 @@ function getAccessToken(oAuth2Client, callback) {
 
 			driveAPI = google.drive({
 				version: 'v3',
-				auth: oAuth2Client,
+				auth: oAuth2Client
 			});
 	
 			callback();
@@ -124,18 +167,42 @@ function getAccessToken(oAuth2Client, callback) {
 	});
 }
 
+/**
+ * Get and store new token after prompting for user authorization, and then
+ * execute the given callback with the authorized OAuth2 client.
+ * @param {google.auth.JWT} jwtClient The OAuth2 client to get token for.
+ * @param {getEventsCallback} callback The callback for the authorized client.
+ */
+function getAccessTokenJWT(jwtClient, callback) {
+	jwtClient.authorize(function (err, tokens) {
+		if (err) return console.error(err);
+		
+		jwtClient.setCredentials(tokens);
+		fs.writeFile(TOKEN_PATH, JSON.stringify(tokens), (err) => {
+			if (err) return console.error(err);
+			console.log('Token stored to', TOKEN_PATH);
+		});
+
+		driveAPI = google.drive({
+			version: 'v3',
+			auth: jwtClient
+		});
+
+		callback();
+	});
+}
+
 async function choice() {
-	const result = await retrieveAllDrives({
+	const drives = await retrieveAllDrives({
 		fields: 'nextPageToken, drives(id, name)'
 	}).catch(console.error);
-	
 	let x = 1;
 
 	let chosen = flags.choice || null;
 	const chosenIsNaN = isNaN(Number(chosen));
 
 	if (chosenIsNaN && chosen !== null) {
-		const foundIndex = result.findIndex(e => e.id === chosen);
+		const foundIndex = drives.findIndex(e => e.id === chosen);
 
 		if (foundIndex < 0) chosen = null;
 		else chosen = foundIndex + 2;
@@ -145,23 +212,23 @@ async function choice() {
 
 	if (!chosen && !flags.auto) {
 		console.log('1: Your own drive');
-		for (const gdrive of result) {
+		for (const gdrive of drives) {
 			console.log(`${++x}: ${gdrive.name} (${gdrive.id})`);
 		}
 	
-		chosen = Number(await question('Enter your choice: '));
+		chosen = Number(await question('Enter your choice: ').catch(console.error));
 	} else if (!chosen && flags.auto) {
 		console.error('Source argument invalid. Aborting auto.');
 		process.exit(1);
 	} else {
-		x += result.length;
+		x += drives.length;
 	}
 
 	if (chosen === 1) {
 		listDriveFiles();
 	} else if (chosen <= x && chosen > 1) {
-		selectedDrive = `${result[chosen - 2].name} (${result[chosen - 2].id})`;
-		listDriveFiles(result[chosen - 2].id);
+		selectedDrive = `${drives[chosen - 2].name} (${drives[chosen - 2].id})`;
+		listDriveFiles(drives[chosen - 2].id);
 	} else {
 		if (flags.choice) flags.choice = null;
 		choice();
@@ -202,7 +269,7 @@ async function listDriveFiles(driveId = null) {
 
 	folderOptions.q += ` and \'${rootfolder ? rootfolder : driveId}\' in parents`;
 
-	let res_folders = await retrieveAllFiles(folderOptions).catch(console.error);
+	let res_folders = await retrieveAllFolders(folderOptions).catch(console.error);
 
 	const order = ['base', 'dlc', 'updates', 'Custom XCI', 'Custom XCI JP', 'Special Collection', 'XCI Trimmed'];
 	const order_nsz = ['base', 'dlc', 'updates'];
@@ -216,7 +283,7 @@ async function listDriveFiles(driveId = null) {
 		if(nspFolder) {
 			folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${nspFolder.id}\' in parents`;
 		
-			const res_nsz = (await retrieveAllFiles(folderOptions).catch(console.error)).filter(folder => order_nsz.includes(folder.name));
+			const res_nsz = (await retrieveAllFolders(folderOptions).catch(console.error)).filter(folder => order_nsz.includes(folder.name));
 		
 			for (const folder of res_nsz) {
 				folders_nsz[order_nsz.indexOf(folder.name)] = folder
@@ -240,7 +307,7 @@ async function listDriveFiles(driveId = null) {
 		if (nszFolder) {
 			folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${nszFolder.id}\' in parents`;
 	
-			const temp = await retrieveAllFiles(folderOptions).catch(console.error);
+			const temp = await retrieveAllFolders(folderOptions).catch(console.error);
 		
 			const res_nsp = res_folders.concat(temp).filter(folder => order.includes(folder.name));
 		
@@ -276,7 +343,7 @@ async function listDriveFiles(driveId = null) {
 		if (customXCIFolder) {
 			folderOptions.q = `mimeType = \'application/vnd.google-apps.folder\' and trashed = false and \'${customXCIFolder.id}\' in parents`;
 
-			const temp = await retrieveAllFiles(folderOptions).catch(console.error);
+			const temp = await retrieveAllFolders(folderOptions).catch(console.error);
 		
 			const res_xci = folders.concat(temp).filter(folder => order.includes(folder.name));
 		
@@ -294,27 +361,29 @@ async function listDriveFiles(driveId = null) {
 
 	if (!fs.existsSync('output/')) fs.mkdirSync('output/');
 
-	await wb.write('./output/spreadsheet.xlsx');
+	wb.write('./output/spreadsheet.xlsx', async (err, stats) => {
+		if (err) return console.error(err);
 
-	console.log('Generation of NSP spreadsheet completed.');
-	console.log(`Took: ${moment.utc(moment().diff(startTime)).format('HH:mm:ss.SSS')}`);
-
-	if (driveId) {
-		let driveAnswer = flags.uploadDrive;
-
-		if (!driveAnswer && !flags.auto) driveAnswer = await question(`Write to ${rootfolder ? rootfolder : selectedDrive}? [y/n]:`);
-		if (!driveAnswer && flags.auto) {
-			debugMessage('Invalid uploadDrive argument. Assuming no upload to shared drive.');
-			writeToDrive();
-		}
-		if (['y', 'Y', 'yes', 'yeS', 'yEs', 'yES', 'Yes', 'YeS', 'YEs', 'YES'].includes(driveAnswer)) {
-			writeToDrive(driveId);
+		console.log('Generation of NSP spreadsheet completed.');
+		console.log(`Took: ${moment.utc(moment().diff(startTime)).format('HH:mm:ss.SSS')}`);
+	
+		if (driveId) {
+			let driveAnswer = flags.uploadDrive;
+	
+			if (!driveAnswer && !flags.auto) driveAnswer = await question(`Write to ${rootfolder ? rootfolder : selectedDrive}? [y/n]:`);
+			if (!driveAnswer && flags.auto) {
+				debugMessage('Invalid uploadDrive argument. Assuming no upload to shared drive.');
+				writeToDrive();
+			}
+			if (['y', 'Y', 'yes', 'yeS', 'yEs', 'yES', 'Yes', 'YeS', 'YEs', 'YES'].includes(driveAnswer)) {
+				writeToDrive(driveId);
+			} else {
+				writeToDrive();
+			}
 		} else {
 			writeToDrive();
 		}
-	} else {
-		writeToDrive();
-	}
+	});
 }
 
 function goThroughFolders(driveId, folders, includeIndex, nameTable = null) {
@@ -363,7 +432,7 @@ async function addToWorkbook(folder, driveId = null) {
 			options.corpora = 'user';
 		}
 	
-		files = await retrieveAllFiles(options).catch(console.error);
+		files = await retrieveAll([folder.id], options, false).catch(console.error);
 	
 		if (files.length) {
 			debugMessage(`Files in ${folder.name}:`);
@@ -486,49 +555,89 @@ async function doUpload(driveId = null) {
 	});
 }
 
-function retrieveAllFiles(options) {
+function retrieveAll(folderIds, options, recurse = true) {
 	return new Promise(async (resolve, reject) => {
-		const result = await retrievePageOfFiles(options, []).catch(console.error);
-	
-		resolve(result);
+		const result = [];
+
+		if (recurse) {
+			if (folderIds.length > 0) {
+				for (folderId of folderIds) {
+					options.q = `\'${folderId}\' in parents and trashed = false and mimeType = \'application/vnd.google-apps.folder\'`;
+					result.push(...await retrieveAllFolders(options).catch(reject));
+		
+					result.push({id: folderId});
+				}
+			} else {
+				options.q = `trashed = false and mimeType = \'application/vnd.google-apps.folder\'`;
+				result.push(...await retrieveAllFolders(options).catch(reject));
+			}
+		} else {
+			result.push(folderIds.length > 1 ? folderids : {id: folderIds[0]});
+		}
+
+		let promises = [];
+		
+		//folderBar.start(result.length, 0);
+
+		for (const folder of result) {
+			debugMessage(`Getting files from ${folder.id}`);
+			promises.push(runFolderWorker({
+				folder,
+				options
+			}));
+		}
+
+		const resp = await Promise.all(promises).catch(console.error);
+
+		//folderBar.stop();
+
+		resolve([].concat.apply([], resp.filter(val => val.length > 0)));
 	});
 }
 
-function retrievePageOfFiles(options, result) {
+function retrieveAllFolders(options, result = []) {
 	return new Promise(async (resolve, reject) => {
-		const resp = await driveAPI.files.list(options).catch(console.error);
+		const resp = await driveAPI.files.list(options).catch(reject);
 	
 		result = result.concat(resp.data.files);
 	
 		if (resp.data.nextPageToken) {
 			options.pageToken = resp.data.nextPageToken;
 	
-			const res = await retrievePageOfFiles(options, result).catch(console.error);
+			const res = await retrieveAllFolders(options, result).catch(reject);
 			resolve(res);
 		} else {
-			resolve(result);
+			resultMap = result.map(v => v.id);
+			result = result.filter((v,i) => resultMap.indexOf(v.id) === i);
+
+			let response = [];
+			for (const folder of result) {
+				options.q = `\'${folder.id}\' in parents and trashed = false and mimeType = \'application/vnd.google-apps.folder\'`;
+				delete options.pageToken;
+				const resp = await retrieveAllFolders(options).catch(reject);
+				response = response.concat(resp);
+			}
+
+			response = response.concat(result);
+
+			responseMap = response.map(v => v = v.id);
+			response = response.filter((v,i) => responseMap.indexOf(v.id) === i);
+
+			resolve(response);
 		}
 	});
 }
 
-function retrieveAllDrives(options) {
+function retrieveAllDrives(options, result = []) {
 	return new Promise(async (resolve, reject) => {
-		const result = await retrievePageOfDrives(options, []).catch(console.error);
-	
-		resolve(result);
-	});
-}
-
-function retrievePageOfDrives(options, result) {
-	return new Promise(async (resolve, reject) => {
-		const resp = await driveAPI.drives.list(options).catch(console.error);
+		const resp = await driveAPI.drives.list(options).catch(reject);
 	
 		result = result.concat(resp.data.drives);
-	
+
 		if (resp.data.nextPageToken) {
 			options.pageToken = resp.data.nextPageToken;
 	
-			const res = await retrievePageOfDrives(options, result).catch(console.error);
+			const res = await retrieveAllDrives(options, result).catch(reject);
 			resolve(res);
 		} else {
 			resolve(result);
@@ -560,6 +669,21 @@ function getFormattedSize(size, decimals = 2, round = 0) {
 
 function floorToDecimal(number, decimals) {
 	return Math.floor(number * ( 10 ** decimals )) / 10 ** decimals;
+}
+
+function runFolderWorker(workerData) {
+	return new Promise((resolve, reject) => {
+		const worker = new Worker('./worker.js', { workerData });
+		worker.on('message', data => {
+			folderBar.increment();
+			resolve(data);
+		});
+		worker.on('error', reject);
+		worker.on('exit', (code) => {
+		if (code !== 0)
+			reject(new Error(`Worker stopped with exit code ${code}`));
+		})
+	});
 }
 
 function debugMessage(text) {

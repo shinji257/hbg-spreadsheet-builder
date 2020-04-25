@@ -1,7 +1,9 @@
 output/
 node_modules/
 
-credentials.json
+credentials*.json
+gdrive*.token
 token*.json
+conf.json
 *.log
 yarn.lock
