@@ -4,6 +4,5 @@ node_modules/
 credentials*.json
 gdrive*.token
 token*.json
-conf.json
 *.log
 yarn.lock
