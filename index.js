@@ -297,7 +297,7 @@ async function listDriveFiles(driveId = null) {
 				updates: 'NSZ Updates',
 			});
 		} else {
-			console.error('No NSP Folder found');
+			console.error('No NSZ Folder found');
 		}
 	}
 
@@ -323,7 +323,7 @@ async function listDriveFiles(driveId = null) {
 				updates: 'NSP Updates',
 			});
 		} else {
-			console.error('No NSZ Folder found');
+			console.error('No NSP Folder found');
 		}
 	} else {
 		for (const folder of res_folders.filter(folder => order.includes(folder.name))) {
